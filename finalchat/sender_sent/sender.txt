@@ -1,0 +1,2 @@
+This is text file being sent by sender
+To the reciever
