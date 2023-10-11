@@ -1,4 +1,5 @@
 import os
+import sys
 from tqdm import tqdm
 import socket
 import threading
@@ -46,7 +47,6 @@ def decrypt_data(encrypted_message, key, iv):
 
 
 def sending_messages(c, key, iv):
-
     # Reading public RSA key of sender host for encryption
     with open("sender_public.pem", "rb") as f:
         sender_public_key = rsa.PublicKey.load_pkcs1(f.read())
@@ -68,16 +68,19 @@ def sending_messages(c, key, iv):
             file_size = os.path.getsize(file_path)
             c.sendall(str(file_size).encode())
 
-            # Sending the actual file data
-            with open(file_path, 'rb') as file:
-                with tqdm(total=file_size, unit='B', unit_scale=True, unit_divisor=1024) as pbar:
-                    while True:
-                        data = file.read(1024)
-                        if not data:
-                            break
-                        AES_encrypted_data = encrypt_data(data, key, iv)
-                        c.sendall(AES_encrypted_data)
-                        pbar.update(len(data))
+            if not os.path.isfile(file_path):
+                Print ("The file does not exist")
+            else:
+                # Sending the actual file data
+                with open(file_path, 'rb') as file:
+                    with tqdm(total=file_size, unit='B', unit_scale=True, unit_divisor=1024) as pbar:
+                        while True:
+                            data = file.read(1008)
+                            if not data:
+                                break
+                            AES_encrypted_data = encrypt_data(data, key, iv)
+                            c.sendall(AES_encrypted_data)
+                            pbar.update(len(data))
 
         else:
             AES_encrypted_message = encrypt_message(message, key, iv)
@@ -88,8 +91,12 @@ def sending_messages(c, key, iv):
 
 
 def recieving_file(c, file_name, key, iv):
-    file_size = int(c.recv(1024).decode())
-    file_name = "reciever_recieved/"+file_name
+    # file_size = int(c.recv(1024).decode())
+
+    file_path = "sending_data/"+ file_name
+    file_size = os.path.getsize(file_path)
+    print(f"Length of recieving file :{file_size}")
+    file_name = "recieved_data/"+file_name
     received_data = b''
     with open(file_name, 'wb') as file:
         with tqdm(total=file_size, unit='B', unit_scale=True, unit_divisor=1024) as pbar:
@@ -98,7 +105,7 @@ def recieving_file(c, file_name, key, iv):
                 decrypted_data = decrypt_data(
                     encrypted_data, key, iv)
                 received_data += decrypted_data
-                pbar.update(len(encrypted_data))
+                pbar.update(len(decrypted_data))
         file.write(received_data)
 
 
@@ -115,12 +122,19 @@ def recieving_messages(c, key, iv):
             decrypted_message = decrypt_message(AES_encrypted_message, key, iv)
             if (decrypted_message.startswith("@File_name:")):
                 recieving_file(c, decrypted_message[11:], key, iv)
+                print(f"Successfully recieved {decrypted_message[11:]}")
             else:
                 print("Partner: " + decrypted_message)
 
 
 if __name__ == "__main__":
-    host = '10.81.58.32'
+     # Get the hostname of the local system
+    hostname = socket.gethostname()
+
+    # Get the IP address associated with the hostname
+    ip_address = socket.gethostbyname(hostname)
+    
+    host = ip_address
     port = 9999
 
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
